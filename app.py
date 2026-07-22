@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("🤝 SCORE Mentor Matching Tool")
-st.write("Enter the client's request or skill requirements below to find the best matching mentors.")
+st.write("Enter the client's request or skill requirements below to find the top matching mentors.")
 
 # --- Helper Function for Medal Tiers ---
 def get_medal_tier(score):
@@ -54,7 +54,6 @@ if st.button("Find Matching Mentors", type="primary"):
         st.warning("Please enter a query or description before searching.")
     else:
         # Combine text columns to build search corpus
-        # Adjust column names below if your Excel headers differ slightly
         search_corpus = df.astype(str).agg(' '.join, axis=1)
 
         # Vectorize and calculate similarity
@@ -69,23 +68,25 @@ if st.button("Find Matching Mentors", type="primary"):
         results_df['Match Score'] = scores
         results_df['Match Tier'] = results_df['Match Score'].apply(get_medal_tier)
 
-        # Filter out non-matching results and sort by score descending
-        filtered_results = results_df[results_df['Match Score'] > 0.05].sort_values(
-            by='Match Score', ascending=False
-        )
+        # Filter out rows with 'No Medal Tier' (score < 0.10)
+        filtered_results = results_df[results_df['Match Tier'] != "No Medal Tier"]
 
-        if filtered_results.empty:
-            st.info("No close mentor matches found for this specific query. Try using broader keywords.")
+        # Sort by Match Score descending and limit to the TOP 3
+        top_matches = filtered_results.sort_values(by='Match Score', ascending=False).head(3)
+
+        if top_matches.empty:
+            st.info("No strong mentor matches found for this specific query. Try using broader keywords.")
         else:
-            # Re-order columns so 'Match Tier' appears first
-            cols = ['Match Tier'] + [c for c in filtered_results.columns if c not in ['Match Score', 'Match Tier']]
-            display_df = filtered_results[cols]
+            # Re-order columns so 'Match Tier' appears first and drop raw 'Match Score'
+            cols = ['Match Tier'] + [c for c in top_matches.columns if c not in ['Match Score', 'Match Tier']]
+            display_df = top_matches[cols]
 
-            st.success(f"Found {len(display_df)} potential mentor matches!")
+            st.success(f"Displaying Top {len(display_df)} Mentor Match(es):")
             
             # Display results table
             st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True
+            )
             )
