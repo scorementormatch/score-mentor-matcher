@@ -15,9 +15,6 @@ st.write("Enter the client's request or skill requirements below to find the top
 
 # --- Helper Function for Medal Tiers ---
 def get_medal_tier(score):
-    """
-    Converts similarity score (0 to 1 scale) into a medal rating tier.
-    """
     if score >= 0.50:
         return "🥇 Gold Match"
     elif score >= 0.25:
@@ -30,10 +27,8 @@ def get_medal_tier(score):
 # --- Data Loading ---
 @st.cache_data
 def load_data():
-    # Load the Excel file from the repository root
     file_path = "Chapter 24 Skill Sets.xlsx"
-    df = pd.read_excel(file_path)
-    return df
+    return pd.read_excel(file_path)
 
 try:
     df = load_data()
@@ -83,10 +78,8 @@ if st.button("Find Matching Mentors", type="primary"):
 
             st.success(f"Displaying Top {len(display_df)} Mentor Match(es):")
             
-            # Display results table
             st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True
-            )
             )
