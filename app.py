@@ -1,78 +1,91 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# --- Page Configuration ---
 st.set_page_config(
-    page_title="SCORE Chapter 24 - Mentor Matcher",
+    page_title="SCORE Mentor Matcher",
     page_icon="🤝",
-    layout="wide",
+    layout="wide"
 )
 
-st.title("🤝 SCORE Chapter 24 Client Intake & Mentor Matcher")
-st.markdown(
-    "Enter the client's business background, industry, or specific challenge below to find the top 3 best-suited mentors."
-)
+st.title("🤝 SCORE Mentor Matching Tool")
+st.write("Enter the client's request or skill requirements below to find the best matching mentors.")
 
+# --- Helper Function for Medal Tiers ---
+def get_medal_tier(score):
+    """
+    Converts similarity score (0 to 1 scale) into a medal rating tier.
+    """
+    if score >= 0.50:
+        return "🥇 Gold Match"
+    elif score >= 0.25:
+        return "🥈 Silver Match"
+    elif score >= 0.10:
+        return "🥉 Bronze Match"
+    else:
+        return "No Medal Tier"
 
+# --- Data Loading ---
 @st.cache_data
 def load_data():
-    df = pd.read_excel("Chapter 24 Skill Sets.xlsx")
-    # Combine relevant text fields for similarity matching
-    df["Combined_Text"] = (
-        df["Skill"].fillna("")
-        + " "
-        + df["Experience"].fillna("")
-        + " "
-        + df["Profile"].fillna("")
-    )
+    # Load the Excel file from the repository root
+    file_path = "Chapter 24 Skill Sets.xlsx"
+    df = pd.read_excel(file_path)
     return df
 
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Error loading 'Chapter 24 Skill Sets.xlsx': {e}")
+    st.stop()
 
-df = load_data()
-
-# User Input
-client_needs = st.text_area(
-    "Client Request / Business Background:",
-    height=120,
-    placeholder="Example: Client wants to launch an artisan bakery. Needs assistance with business planning, local marketing, lease negotiation, and financial forecasting.",
+# --- Search Input ---
+user_query = st.text_area(
+    "Describe the client's needs or key business topics:",
+    placeholder="e.g., Needs help with digital marketing, quickbooks accounting, and business plan formation",
+    height=100
 )
 
-if st.button("Find Top Mentor Matches", type="primary"):
-    if not client_needs.strip():
-        st.warning(
-            "Please enter a client request or business description to match."
-        )
+# --- Matching Logic ---
+if st.button("Find Matching Mentors", type="primary"):
+    if not user_query.strip():
+        st.warning("Please enter a query or description before searching.")
     else:
-        # TF-IDF Matching Engine
-        corpus = df["Combined_Text"].tolist()
-        vectorizer = TfidfVectorizer(stop_words="english")
-        tfidf_matrix = vectorizer.fit_transform(corpus)
+        # Combine text columns to build search corpus
+        # Adjust column names below if your Excel headers differ slightly
+        search_corpus = df.astype(str).agg(' '.join, axis=1)
 
-        query_vec = vectorizer.transform([client_needs])
+        # Vectorize and calculate similarity
+        vectorizer = TfidfVectorizer(stop_words='english')
+        tfidf_matrix = vectorizer.fit_transform(search_corpus)
+        query_vec = vectorizer.transform([user_query])
+        
         scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
 
-        # Get top 3 indices
-        top_indices = scores.argsort()[-3:][::-1]
+        # Add match scores and medal tiers to dataframe
+        results_df = df.copy()
+        results_df['Match Score'] = scores
+        results_df['Match Tier'] = results_df['Match Score'].apply(get_medal_tier)
 
-        st.subheader("🎯 Recommended Mentor Matches")
+        # Filter out non-matching results and sort by score descending
+        filtered_results = results_df[results_df['Match Score'] > 0.05].sort_values(
+            by='Match Score', ascending=False
+        )
 
-        results = []
-        for idx in top_indices:
-            row = df.iloc[idx]
-            match_score = round(scores[idx] * 100, 1)
+        if filtered_results.empty:
+            st.info("No close mentor matches found for this specific query. Try using broader keywords.")
+        else:
+            # Re-order columns so 'Match Tier' appears first
+            cols = ['Match Tier'] + [c for c in filtered_results.columns if c not in ['Match Score', 'Match Tier']]
+            display_df = filtered_results[cols]
 
-            results.append(
-                {
-                    "Mentor Last Name": row["Last_Name"],
-                    "Match Relevancy": f"{match_score}%",
-                    "Core Skills": row["Skill"],
-                    "Industry Experience": row["Experience"],
-                    "Background Summary": row["Profile"],
-                }
+            st.success(f"Found {len(display_df)} potential mentor matches!")
+            
+            # Display results table
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
             )
-
-        results_df = pd.DataFrame(results)
-
-        # Display formatted table
-        st.dataframe(results_df, use_container_width=True)
